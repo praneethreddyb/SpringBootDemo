@@ -1,15 +1,32 @@
 package com.demo.core.util;
 
+import java.awt.AlphaComposite;
+import java.awt.Graphics2D;
+import java.awt.Image;
+import java.awt.RenderingHints;
+import java.awt.image.BufferedImage;
+import java.io.File;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.lang.reflect.Array;
+import java.text.DateFormat;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Calendar;
 import java.util.Collection;
 import java.util.Date;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.TimeUnit;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
+
+import javax.imageio.ImageIO;
 
 import org.yaml.snakeyaml.Yaml;
 
@@ -18,6 +35,68 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 public class Util {
+
+	public static Date addMinutesToDate(int minutes, Date beforeTime) {
+		final long ONE_MINUTE_IN_MILLIS = 60000;// millisecs
+		long curTimeInMs = beforeTime.getTime();
+		Date afterAddingMins = new Date(curTimeInMs + (minutes * ONE_MINUTE_IN_MILLIS));
+		return afterAddingMins;
+	}
+
+	public static String addMinutesToDate(int minutes) {
+		Date date = addMinutesToDate(minutes, new Date());
+		DateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+		String strDate = dateFormat.format(date);
+		return strDate;
+	}
+
+	public static String generateSecretCode() {
+		return UUID.randomUUID().toString() + "-" + Calendar.getInstance().getTimeInMillis();
+	}
+
+	public Integer generateRandomNumber(boolean mobileAccess) {
+		return mobileAccess ? ((int) Math.random() * 999999 + 100000) : null;
+	}
+
+	public static int yearDiff(String fmVal, Date toDate) {
+		if (isBlank(fmVal))
+			return 0;
+		Date fromDate = null;
+		try {
+			fromDate = getDateFromUtcString(fmVal.toString());
+		} catch (Exception e) {
+			return 0;
+		}
+		return getDiffYears(fromDate, toDate);
+	}
+
+	public static long getMinDiff(Date first, Date last) {
+		long diff = last.getTime() - first.getTime();
+		diff = diff / (1000 * 60);
+		return diff < 0 ? diff * -1 : diff;
+	}
+
+	public static int getDiffDays(Date first, Date last) {
+		long diff = last.getTime() - first.getTime();
+		return (int) TimeUnit.DAYS.convert(diff, TimeUnit.MILLISECONDS);
+	}
+
+	public static int getDiffYears(Date first, Date last) {
+		Calendar a = getCalendar(first);
+		Calendar b = getCalendar(last);
+		int diff = b.get(Calendar.YEAR) - a.get(Calendar.YEAR);
+		if (a.get(Calendar.MONTH) > b.get(Calendar.MONTH)
+				|| (a.get(Calendar.MONTH) == b.get(Calendar.MONTH) && a.get(Calendar.DATE) > b.get(Calendar.DATE))) {
+			diff--;
+		}
+		return diff;
+	}
+
+	public static Calendar getCalendar(Date date) {
+		Calendar cal = Calendar.getInstance();
+		cal.setTime(date);
+		return cal;
+	}
 
 	public static Date getCurrentDate() {
 		return new Date();
@@ -39,6 +118,191 @@ public class Util {
 	public static String truncate(String s, int len) {
 		return s == null ? null : (s.length() <= len ? s : s.substring(0, len));
 	}
+	
+	/**
+	 * Get question place holders by size
+	 * 
+	 * @param size
+	 * @return String of questions marks separated by commas
+	 * @author Jagadeesh.T
+	 * @since 2018-07-20
+	 */
+	public static String getQuestionMarksByNos(int size) {
+		String res="";
+		for(int i=0;i<size;i++) {
+			res+= (res.equals("")?"?":",?");
+		}
+		return res;
+	}
+	public static void buildProcessValidationMsg(ZcMap res,String msg) {
+		if(msg!=null && msg.startsWith("ZcProcException::")) msg=msg.replace("ZcProcException::", "");
+		else if(msg==null)	msg="Error occured";
+		ZcMap  data=new ZcMap();
+		data.put("msg", msg);//rule.getS("errorMsg." + p.accessKit.lang));
+		res.getZcMapList("errors").add(data);
+	}
+	public static void buildProcessValidationMsg(ZcMap rule,ZcMap res,String lang) {
+		ZcMap  data=new ZcMap();
+		data.put("msg", rule.getS("errorMsg." + lang));
+		res.getZcMapList("errors").add(data);
+	}
+	
+	/**
+	 * This method will do setup JqGrid data, defines total pages, page no., records
+	 * per page, records and total no. of records
+	 * 
+	 * @author Mahesh.J
+	 * @since 2018-02-14
+	 * @param reqData
+	 * @param map
+	 * @param page
+	 * @return JqGridData
+	 */
+	@SuppressWarnings({ "serial" })
+	public static ZcMap getJqGridData(ZcMap reqData, ZcMap map, int page) {
+		try {
+			int size = parseInt(reqData.get("rows") + "");
+			int totalNumberOfRecords = (Integer) map.get("totalCount");
+			double totalPages = 1;
+			if (size > 0)
+				totalPages = (((double) totalNumberOfRecords) / ((double) size));
+			else {
+				totalPages = 1;
+				size = totalNumberOfRecords;
+			}
+			totalPages = (totalPages == ((int) totalPages)) ? totalPages : (((int) totalPages) + 1);
+			JqGridData jqGridData = new JqGridData(((int) totalPages), page - 1, size, map, totalNumberOfRecords);
+			return new ZcMap() {
+				{
+					put("listData", jqGridData);
+				}
+			};
+		} catch (NullPointerException e) {
+			return new ZcMap() {
+				{
+					put("listData", null);
+				}
+			};
+		}
+	}
+	
+	
+	public static boolean isValidEmail(String email) {
+		String emailRegex = "^[a-zA-Z0-9_+&*-]+(?:\\." + "[a-zA-Z0-9_+&*-]+)*@" + "(?:[a-zA-Z0-9-]+\\.)+[a-z"
+				+ "A-Z]{2,7}$";
+
+		Pattern pat = Pattern.compile(emailRegex);
+		if (email == null)
+			return false;
+		return pat.matcher(email).matches();
+	}
+	
+	
+	public static boolean isValidPassword(String password) {
+		String passwordRegex = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[#?!@$%^&*-])[A-Za-z\\d#?!@$%^&*-]{8,20}$";
+		Pattern pat = Pattern.compile(passwordRegex);
+		if (password == null)
+			return false;
+		return pat.matcher(password).matches();
+	}
+	
+
+
+ 
+
+	/**
+	 * 
+	 * 
+	 * @param srcImagePath
+	 * @param dstImagePath
+	 * @param paramHeight
+	 * @param paramWidth
+	 * @param extension
+	 * @throws Exception
+	 */
+	public static void resizeImage(String srcImagePath, String dstImagePath, int paramHeight, int paramWidth,
+			String extension) throws Exception {
+		if (isBlank(srcImagePath) || isBlank(dstImagePath)) {
+			return;
+		}
+		File srcFile = new File(srcImagePath);
+		if (!srcFile.exists()) {
+			return;
+		}
+		File file = new File(dstImagePath);
+		if (!file.exists()) {
+			file.getParentFile().mkdirs();
+			file.createNewFile();
+		}
+
+		Image img = null;
+		BufferedImage tempBufFile = null;
+		img = ImageIO.read(srcFile);
+		tempBufFile = resizeImage(img, paramHeight, paramWidth);
+		ImageIO.write(tempBufFile, extension, file);
+	}
+
+	/**
+	 * This function resize the image file and returns the BufferedImage object that
+	 * can be saved to file system.
+	 * 
+	 * @author Mahesh J
+	 * @param image
+	 * @param width
+	 * @param height
+	 * @return BufferedImage
+	 */
+	public static BufferedImage resizeImage(final Image image, int width, int height) {
+		final BufferedImage bufferedImage = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
+		final Graphics2D graphics2D = bufferedImage.createGraphics();
+		graphics2D.setComposite(AlphaComposite.Src);
+		// below three lines are for RenderingHints for better image quality at cost of
+		// higher processing time
+		graphics2D.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+		graphics2D.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
+		graphics2D.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+		graphics2D.drawImage(image, 0, 0, width, height, null);
+		graphics2D.dispose();
+		return bufferedImage;
+	}
+
+	/**
+	 * List's all the children nodes of the given map from the given list of ZcMap's
+	 * and Arranges them in an order and inserts Children into the given map
+	 * 
+	 * @param map
+	 * @param actList
+	 * @author Jagadeesh.T
+	 * @since 2018-07-20
+	 */
+	public static void arrangeTree(ZcMap map, List<ZcMap> actList, String uidKey, String parentKey) {
+		List<ZcMap> childs = actList.stream()
+				.filter(x -> map.hasData(uidKey) && map.getS(uidKey).equals(x.getS(parentKey)))
+				.collect(Collectors.toList());
+		childs.forEach(x -> {
+			arrangeTree(x, actList, uidKey, parentKey);
+		});
+		map.put("childs", childs);
+	}
+	
+	public static void arrangeTreeForAdmin(ZcMap map, List<ZcMap> actList, String uidKey, String parentKey) {
+		List<ZcMap> childs = new ArrayList<ZcMap>();
+		for (ZcMap data : actList) {
+			if(map.equals(data))
+				continue;
+			if(map.getS("uid").equals(data.getS(parentKey))) 
+				childs.add(data);
+		}
+		actList.removeAll(childs);
+		childs.forEach(x -> {
+			arrangeTreeForAdmin(x, actList, uidKey, parentKey);
+		});
+		map.put("childs", childs);
+	}
+	
+	
+	
+	
 	
 	public static ZcMap jsonToZcMap(String s) {
 		try {
@@ -342,5 +606,82 @@ public class Util {
 		}
 	}
 
+	public static ZcMap makeBody(Set<String> wildCards, ZcMap wildCardsData, String subject, String body, int i){
+		ZcMap retData = new ZcMap();
+		for (String eachWildCard : wildCards) {
+			String[] wildCard = eachWildCard.split("\\(");
+			String [] checkIfList = eachWildCard.split("\\[");
+			Object _v = wildCardsData.get(wildCard[0].replace("[ind]", (wildCardsData.get(checkIfList[0]) instanceof List) ? "["+i+"]" : "").trim());
+			_v = _v == null ? "" : _v;
+			if (wildCard.length > 1 && hasData(wildCard[1])) {
+				String type = wildCard[1].replace(")", "");
+				if(type.equalsIgnoreCase("UPPER"))  _v =_v.toString().toUpperCase();
+				else if (type.equalsIgnoreCase("LOWER")) _v =_v.toString().toLowerCase();
+				else if (type.equalsIgnoreCase("TITLE"))  _v = convertToTitleCase(_v.toString());
+				else if (type.equalsIgnoreCase("TOGGLE"))  _v = convertToToggleCase(_v.toString());
+				else if (type.equalsIgnoreCase("CAMEL"))  _v = convertToCamelCase(_v.toString());
+			}
+			if(hasData(subject))subject = subject.replace("{{" + eachWildCard + "}}", hasData(_v) ? _v.toString(): "");
+			if(hasData(body))body = body.replace("{{" + eachWildCard + "}}", hasData(_v) ? _v.toString(): "");
+		}
+		retData.put("body", body);
+		retData.put("subject", subject);
+		return retData;
+	}
 	
+	public static boolean hasData(Object o) {
+		return !isBlank(o);
+	}
+	
+	
+	public static String convertToTitleCase(String inputString) {
+		String result = "";
+	       if (isBlank(inputString) || inputString.trim().length() == 0)  return result;
+	       result = result + Character.toUpperCase(inputString.charAt(0));
+	       boolean terminalCharacterEncountered = false;
+	       char[] terminalCharacters = {'.', '?', '!'};
+	       for (int i = 1; i < inputString.length(); i++) {
+	           char currentChar = inputString.charAt(i);
+	           if (terminalCharacterEncountered) {
+	               if (currentChar == ' ') {
+	                   result = result + currentChar;
+	               } else {
+	                   result = result + Character.toUpperCase(currentChar);
+	                   terminalCharacterEncountered = false;
+	               }
+	           } else 
+	               result = result + Character.toLowerCase(currentChar);
+	           for (int j = 0; j < terminalCharacters.length; j++) {
+	               if (currentChar == terminalCharacters[j]) {
+	                   terminalCharacterEncountered = true;
+	                   break;
+	               }
+	           }
+	       }
+	       return result;
+	}
+	
+	public static String convertToToggleCase(String inputString) {
+		if (isBlank(inputString) || inputString.trim().length() == 0) return "";
+		if (inputString.trim().length() == 1) return inputString.toUpperCase();
+		String result = "";
+		inputString = inputString.trim();
+		for (char c : inputString.toCharArray()) {
+			if (Character.isUpperCase(c))  result = result + Character.toLowerCase(c);
+			else if (Character.isLowerCase(c)) result = result + Character.toUpperCase(c);
+			else  result = result + c;
+		}
+		return result;
+	}
+	
+	 public static String convertToCamelCase(String inputString) {
+	       String result = "";
+	       if (isBlank(inputString) || inputString.trim().length() == 0)  return result;
+	       result = result + Character.toUpperCase(inputString.charAt(0));
+	       for (int i = 1; i < inputString.length(); i++) {
+	           char currentChar = inputString.charAt(i);
+	           result = result + ((inputString.charAt(i - 1) == ' ') ?  Character.toUpperCase(currentChar) : Character.toLowerCase(currentChar));
+	       }
+	       return result;
+	   }
 }
