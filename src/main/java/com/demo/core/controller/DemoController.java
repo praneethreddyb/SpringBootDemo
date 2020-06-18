@@ -3,6 +3,7 @@ package com.demo.core.controller;
 import javax.servlet.http.HttpServletRequest;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.CacheManager;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
@@ -21,6 +22,10 @@ public class DemoController extends BaseController{
 	@Autowired
 	private  DemoService demodService;
 	
+	@Autowired
+	CacheManager cacheManager;
+	
+	
 	public DemoController(HttpServletRequest request) {
 		super(request);
 	}
@@ -37,5 +42,15 @@ public class DemoController extends BaseController{
 	@RequestMapping(path = "/checkDbConnection" , method = RequestMethod.GET)
 	public ResponseEntity checkDbConnection(){
 		return new ResponseEntity(sessionInfo.request,demodService.checkDbConnection()) ;
+	}
+	
+	@SuppressWarnings("serial")
+	@RequestMapping(path = "/checkRedisCacheConnection",method = RequestMethod.GET)
+	public ResponseEntity checkRedisConnection() {
+		return new ResponseEntity(sessionInfo.request,new ZcMap() {{
+			cacheManager.getCache("test").put("x", "test");
+			put("success", true);
+			put("message", "Connection Success");
+		}});
 	}
 }

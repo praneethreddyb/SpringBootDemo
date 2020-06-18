@@ -6,9 +6,15 @@ import java.awt.Image;
 import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
 import java.io.File;
+import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.lang.reflect.Array;
+import java.net.URISyntaxException;
+import java.nio.charset.StandardCharsets;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.SQLException;
 import java.text.DateFormat;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
@@ -25,16 +31,56 @@ import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
-
 import javax.imageio.ImageIO;
 
+import org.apache.commons.io.FileUtils;
 import org.yaml.snakeyaml.Yaml;
-
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 public class Util {
+	
+	public static Connection getConnection(ZcMap connDetails) throws ClassNotFoundException, SQLException {
+		return getConnection(connDetails.getS("host"), connDetails.getI("port"), connDetails.getS("schema"), 
+				connDetails.getS("user"), connDetails.getS("password"));
+	}
+	
+	public static String getSqlResourceFileAsString(String path) throws URISyntaxException, IOException {
+		if(isBlank(path)) return null;
+		return FileUtils.readFileToString(new File(ClassLoader.getSystemClassLoader()
+						.getResource(path).getFile()), StandardCharsets.UTF_8);
+	}
+	
+	public static void main(String[] args) throws URISyntaxException, IOException {
+		System.out.println(getSqlResourceFileAsString("script/dbscript.sql"));
+	}
+	
+	public static Connection getConnection(String host,int port,String schema,String user,String password) throws ClassNotFoundException, SQLException {
+		Class.forName("com.mysql.cj.jdbc.Driver");  
+		String url="jdbc:mysql://${host}:${port}/${db_name}?useUnicode=true&characterEncoding=utf-8&allowMultiQueries=true&useSSL=false&useLegacyDatetimeCode=false&allowPublicKeyRetrieval=true&serverTimezone="+Calendar.getInstance().getTimeZone().getID();
+		url=url.replace("${host}",  host);
+		url=url.replace("${db_name}", schema);
+		url=url.replace("${port}",  port+"");
+		Connection conn=DriverManager.getConnection(url,user,password);  
+		return conn;
+	}
+	
+	public static void closeConnection(Connection conn) {
+		if(conn==null) return;
+		try {
+			if(!conn.getAutoCommit()) conn.commit();
+		}catch (Exception e) {
+//			e.printStackTrace();
+		}
+		try {
+			if(!conn.isClosed()) {
+				conn.close();
+			}
+		}catch (Exception e) {
+			//e.printStackTrace();
+		}
+	}
 
 	public static Date addMinutesToDate(int minutes, Date beforeTime) {
 		final long ONE_MINUTE_IN_MILLIS = 60000;// millisecs
